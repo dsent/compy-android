@@ -1994,6 +1994,15 @@ class SDLMain implements Runnable {
                             Log.e("SDL", "main ended " + sQuickEnds + " times in a row within "
                                 + QUICK_MS + " ms of starting: not starting another,"
                                 + " going to the home screen");
+                            // recorded as paused, so the event that brings the
+                            // activity back (onStart, focus, a new surface) starts a
+                            // main the normal way, and the next quick end meets the
+                            // cap again; left RESUMED, a return before onStop would
+                            // find nothing to do and stay blank
+                            if (SDLActivity.mSurface != null) {
+                                SDLActivity.mSurface.handlePause();
+                            }
+                            SDLActivity.mCurrentNativeState = SDLActivity.NativeState.PAUSED;
                             SDLActivity.minimizeWindow();
                             return;
                         }
