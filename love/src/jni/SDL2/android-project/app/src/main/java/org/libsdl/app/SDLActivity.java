@@ -1943,6 +1943,31 @@ class SDLMain implements Runnable {
                 // Let's finish the Activity
                 SDLActivity.mSDLThread = null;
                 SDLActivity.mSingleton.finish();
+
+                // love2d-mod-start: a main started again begins unpaused
+                // The activity may stay: a kiosk in lock task mode refuses
+                // finish(). If it was resumed while this main was ending,
+                // handleNativeState took the nativeResume() branch and
+                // recorded RESUMED, so nothing would start the next main.
+                // Back on the UI thread, a staying activity recorded as
+                // resumed is set back to paused and asked to resume, which
+                // starts the next main once it has its surface and focus.
+                final SDLActivity activity = SDLActivity.mSingleton;
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (SDLActivity.mSDLThread == null
+                                && SDLActivity.mSingleton == activity
+                                && !activity.isFinishing()
+                                && SDLActivity.mCurrentNativeState == SDLActivity.NativeState.RESUMED) {
+                            Log.v("SDL", "main ended in a resumed activity: starting the next main");
+                            SDLActivity.mCurrentNativeState = SDLActivity.NativeState.PAUSED;
+                            SDLActivity.mNextNativeState = SDLActivity.NativeState.RESUMED;
+                            SDLActivity.handleNativeState();
+                        }
+                    }
+                });
+                // love2d-mod-end: a main started again begins unpaused
             }  // else: Activity is already being destroyed
         }
         // love2d-mod-end: allow restarting of the native thread
