@@ -1921,7 +1921,7 @@ class SDLMain implements Runnable {
     // love2d-mod-start: a main started again begins unpaused
     // a main that ends this soon after starting ends quickly
     static final long QUICK_MS = 2000;
-    // quick ends in a row after which no next main is started
+    // quick ends in a row at which no next main is started
     static final int QUICK_ENDS = 3;
     // quick ends in a row so far, on the UI thread
     static int sQuickEnds = 0;
@@ -1941,7 +1941,7 @@ class SDLMain implements Runnable {
         }
 
         Log.v("SDL", "Running main function " + function + " from library " + library);
-        final long started = android.os.SystemClock.uptimeMillis(); // love2d-mod: a main started again begins unpaused
+        final long started = android.os.SystemClock.elapsedRealtime(); // love2d-mod: a main started again begins unpaused
 
         SDLActivity.nativeRunMain(library, function, arguments);
 
@@ -1969,12 +1969,18 @@ class SDLMain implements Runnable {
                 // can end before onStop: the next main then starts and waits
                 // at its window until the activity comes back, as it would.
                 // A main that ends within QUICK_MS of starting counts as a
-                // quick end; after QUICK_ENDS of them in a row no next main
-                // is started, so a start that fails at once cannot spin.
-                final long lived = android.os.SystemClock.uptimeMillis() - started;
+                // quick end, and one that lived longer clears the count.
+                // At QUICK_ENDS quick ends in a row no next main is started,
+                // so a start that fails at once cannot spin: the window goes
+                // to the back, and the launcher starts the app again at its
+                // own pace.
+                final long lived = android.os.SystemClock.elapsedRealtime() - started;
                 activity.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        if (lived >= QUICK_MS) {
+                            sQuickEnds = 0;
+                        }
                         if (SDLActivity.mSDLThread != null
                                 || SDLActivity.mSingleton != activity
                                 || activity.isFinishing()
@@ -1983,12 +1989,12 @@ class SDLMain implements Runnable {
                         }
                         if (lived < QUICK_MS) {
                             sQuickEnds++;
-                        } else {
-                            sQuickEnds = 0;
                         }
-                        if (sQuickEnds > QUICK_ENDS) {
+                        if (sQuickEnds >= QUICK_ENDS) {
                             Log.e("SDL", "main ended " + sQuickEnds + " times in a row within "
-                                + QUICK_MS + " ms of starting: not starting another");
+                                + QUICK_MS + " ms of starting: not starting another,"
+                                + " going to the home screen");
+                            SDLActivity.minimizeWindow();
                             return;
                         }
                         Log.v("SDL", "main ended in a resumed activity after " + lived
