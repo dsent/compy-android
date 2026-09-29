@@ -233,6 +233,7 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
             x = motionListener.getEventX(event);
             y = motionListener.getEventY(event);
 
+            SDLMouseButtonKeys.onMouseEvent(event, mouseButton, x, y, motionListener.inRelativeMode()); // love2d-mod: a mouse's back button is its right button
             SDLActivity.onNativeMouse(mouseButton, action, x, y, motionListener.inRelativeMode());
         } else {
             switch(action) {
@@ -365,6 +366,7 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     // Captured pointer events for API 26.
     public boolean onCapturedPointerEvent(MotionEvent event)
     {
+        SDLMouseButtonKeys.onMouseEvent(event, event.getButtonState(), 0, 0, true); // love2d-mod: a mouse's back button is its right button
         int action = event.getActionMasked();
 
         float x, y;

@@ -472,6 +472,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     protected void onPause() {
         Log.v(TAG, "onPause()");
         super.onPause();
+        SDLMouseButtonKeys.reset(); // love2d-mod: a mouse's back button is its right button
 
         if (mHIDDeviceManager != null) {
             mHIDDeviceManager.setFrozen(true);
@@ -560,6 +561,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
            nativeFocusChanged(true);
 
         } else {
+           SDLMouseButtonKeys.reset(); // love2d-mod: a mouse's back button is its right button
            nativeFocusChanged(false);
            if (!mHasMultiWindow) {
                mNextNativeState = NativeState.PAUSED;
@@ -693,6 +695,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         }
 
         int keyCode = event.getKeyCode();
+        SDLMouseButtonKeys.trace("activity", event); // love2d-mod: a mouse's back button is its right button
         // Ignore certain special keys so they're handled by Android
         if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
             keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
@@ -1340,6 +1343,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     }
 
     public static boolean handleKeyEvent(View v, int keyCode, KeyEvent event, InputConnection ic) {
+        SDLMouseButtonKeys.trace("view", event); // love2d-mod: a mouse's back button is its right button
         int deviceId = event.getDeviceId();
         int source = event.getSource();
 
@@ -1383,12 +1387,20 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                 switch (event.getAction()) {
                 case KeyEvent.ACTION_DOWN:
                 case KeyEvent.ACTION_UP:
+                    SDLMouseButtonKeys.mouseKeyDropped(event); // love2d-mod: a mouse's back button is its right button
                     // mark the event as handled or it will be handled by system
                     // handling KEYCODE_BACK by system will call onBackPressed()
                     return true;
                 }
             }
         }
+
+        // love2d-mod-start: a mouse's back button is its right button
+        // the same keys when they come without the mouse source
+        if (SDLMouseButtonKeys.consume(event)) {
+            return true;
+        }
+        // love2d-mod-end: a mouse's back button is its right button
 
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             if (isTextInputEvent(event)) {
@@ -1960,6 +1972,13 @@ class DummyEdit extends View implements View.OnKeyListener {
         // FIXME: A more effective solution would be to assume our Layout to be RelativeLayout or LinearLayout
         // FIXME: And determine the keyboard presence doing this: http://stackoverflow.com/questions/2150078/how-to-check-visibility-of-software-keyboard-in-android
         // FIXME: An even more effective way would be if Android provided this out of the box, but where would the fun be in that :)
+        // love2d-mod-start: a mouse's back button is its right button
+        // before the input method, which takes a Back while it is shown
+        SDLMouseButtonKeys.trace("before input method", event);
+        if (SDLMouseButtonKeys.consume(event)) {
+            return true;
+        }
+        // love2d-mod-end: a mouse's back button is its right button
         if (event.getAction()==KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
             if (SDLActivity.mTextEdit != null && SDLActivity.mTextEdit.getVisibility() == View.VISIBLE) {
                 SDLActivity.onNativeKeyboardFocusLost();

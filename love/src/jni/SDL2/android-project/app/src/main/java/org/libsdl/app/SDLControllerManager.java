@@ -629,6 +629,7 @@ class SDLGenericMotionListener_API12 implements View.OnGenericMotionListener {
                 return SDLControllerManager.handleJoystickMotionEvent(event);
 
             case InputDevice.SOURCE_MOUSE:
+                SDLMouseButtonKeys.onMouseEvent(event, event.getButtonState(), event.getX(0), event.getY(0), false); // love2d-mod: a mouse's back button is its right button
                 action = event.getActionMasked();
                 switch (action) {
                     case MotionEvent.ACTION_SCROLL:
@@ -686,6 +687,8 @@ class SDLGenericMotionListener_API12 implements View.OnGenericMotionListener {
 
 class SDLGenericMotionListener_API24 extends SDLGenericMotionListener_API12 {
     // Generic Motion (mouse hover, joystick...) events go here
+    // love2d-mod: in relative mode on API 24 and 25, the hover events
+    // below return before SDLMouseButtonKeys sees their button state
 
     private boolean mRelativeModeEnabled;
 
@@ -760,6 +763,7 @@ class SDLGenericMotionListener_API26 extends SDLGenericMotionListener_API24 {
             case InputDevice.SOURCE_MOUSE:
             // DeX desktop mouse cursor is a separate non-standard input type.
             case InputDevice.SOURCE_MOUSE | InputDevice.SOURCE_TOUCHSCREEN:
+                SDLMouseButtonKeys.onMouseEvent(event, event.getButtonState(), event.getX(0), event.getY(0), false); // love2d-mod: a mouse's back button is its right button
                 action = event.getActionMasked();
                 switch (action) {
                     case MotionEvent.ACTION_SCROLL:
@@ -780,6 +784,7 @@ class SDLGenericMotionListener_API26 extends SDLGenericMotionListener_API24 {
                 break;
 
             case InputDevice.SOURCE_MOUSE_RELATIVE:
+                SDLMouseButtonKeys.onMouseEvent(event, event.getButtonState(), 0, 0, true); // love2d-mod: a mouse's back button is its right button
                 action = event.getActionMasked();
                 switch (action) {
                     case MotionEvent.ACTION_SCROLL:

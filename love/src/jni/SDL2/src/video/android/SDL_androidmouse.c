@@ -193,49 +193,68 @@ void Android_QuitMouse(void)
     Android_DestroyEmptyCursor();
 }
 
-/* Translate Android mouse button state to SDL mouse button */
-static Uint8 TranslateButton(int state)
+/* love2d-mod-start: a mouse's back button is its right button
+ * Translate Android mouse button state to the SDL buttons it holds.
+ * Some Android builds report a mouse's right button as BUTTON_BACK
+ * rather than BUTTON_SECONDARY; on such a build the press comes only
+ * in hover events, from which SDLMouseButtonKeys.java sends it here,
+ * and the Back key that comes with it is dropped. BUTTON_BACK is the
+ * right button, held while either Android button is. */
+static Uint32 ButtonMask(int state)
 {
+    Uint32 mask = 0;
     if (state & BUTTON_PRIMARY) {
-        return SDL_BUTTON_LEFT;
-    } else if (state & BUTTON_SECONDARY) {
-        return SDL_BUTTON_RIGHT;
-    } else if (state & BUTTON_TERTIARY) {
-        return SDL_BUTTON_MIDDLE;
-    } else if (state & BUTTON_FORWARD) {
-        return SDL_BUTTON_X1;
-    } else if (state & BUTTON_BACK) {
-        return SDL_BUTTON_X2;
-    } else {
-        return 0;
+        mask |= SDL_BUTTON_LMASK;
+    }
+    if (state & (BUTTON_SECONDARY | BUTTON_BACK)) {
+        mask |= SDL_BUTTON_RMASK;
+    }
+    if (state & BUTTON_TERTIARY) {
+        mask |= SDL_BUTTON_MMASK;
+    }
+    if (state & BUTTON_FORWARD) {
+        mask |= SDL_BUTTON_X1MASK;
+    }
+    return mask;
+}
+
+/* Sends SDL every button whose state changed, releases first, since
+ * one Android event may change several buttons at once. */
+static void SendButtonChanges(SDL_Window *window, int state)
+{
+    Uint32 before = ButtonMask(last_state);
+    Uint32 after = ButtonMask(state);
+    Uint8 button;
+
+    last_state = state;
+    for (button = SDL_BUTTON_LEFT; button <= SDL_BUTTON_X1; ++button) {
+        if ((before & ~after) & SDL_BUTTON(button)) {
+            SDL_SendMouseButton(window, 0, SDL_RELEASED, button);
+        }
+    }
+    for (button = SDL_BUTTON_LEFT; button <= SDL_BUTTON_X1; ++button) {
+        if ((after & ~before) & SDL_BUTTON(button)) {
+            SDL_SendMouseButton(window, 0, SDL_PRESSED, button);
+        }
     }
 }
+/* love2d-mod-end: a mouse's back button is its right button */
 
 void Android_OnMouse(SDL_Window *window, int state, int action, float x, float y, SDL_bool relative)
 {
-    int changes;
-    Uint8 button;
-
+    /* love2d-mod: the changes/button locals went with TranslateButton */
     if (window == NULL) {
         return;
     }
 
     switch (action) {
+    /* love2d-mod-start: press and release both send every changed button */
     case ACTION_DOWN:
-        changes = state & ~last_state;
-        button = TranslateButton(changes);
-        last_state = state;
-        SDL_SendMouseMotion(window, 0, relative, (int)x, (int)y);
-        SDL_SendMouseButton(window, 0, SDL_PRESSED, button);
-        break;
-
     case ACTION_UP:
-        changes = last_state & ~state;
-        button = TranslateButton(changes);
-        last_state = state;
         SDL_SendMouseMotion(window, 0, relative, (int)x, (int)y);
-        SDL_SendMouseButton(window, 0, SDL_RELEASED, button);
+        SendButtonChanges(window, state);
         break;
+    /* love2d-mod-end: press and release both send every changed button */
 
     case ACTION_MOVE:
     case ACTION_HOVER_MOVE:
