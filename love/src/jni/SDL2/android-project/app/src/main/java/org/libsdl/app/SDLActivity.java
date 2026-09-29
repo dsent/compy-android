@@ -743,6 +743,14 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                     // Start up the C app thread and enable sensor input for the first time
                     // FIXME: Why aren't we enabling sensor input at start?
 
+                    // love2d-mod-start: a main started again begins unpaused
+                    // A main can end after the activity was paused, and the
+                    // activity outlive it (the embedded build, or a kiosk that
+                    // refuses finish()); the pause it never took would hold the
+                    // next main at its window. With no main running, start clean.
+                    nativeClearPauseState();
+                    // love2d-mod-end: a main started again begins unpaused
+
                     mSDLThread = new Thread(new SDLMain(), "SDLThread");
                     mSurface.enableSensor(Sensor.TYPE_ACCELEROMETER, true);
                     mSDLThread.start();
@@ -940,6 +948,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     public static native void nativeSendQuit();
     public static native void nativeQuit();
     public static native void nativePause();
+    public static native void nativeClearPauseState(); // love2d-mod: a main started again begins unpaused
     public static native void nativeResume();
     public static native void nativeFocusChanged(boolean hasFocus);
     public static native void onNativeDropFile(String filename);

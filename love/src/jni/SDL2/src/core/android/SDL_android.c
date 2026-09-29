@@ -143,6 +143,10 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativePause)(
 JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeResume)(
     JNIEnv *env, jclass cls);
 
+/* love2d-mod: a main started again begins unpaused */
+JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeClearPauseState)(
+    JNIEnv *env, jclass cls);
+
 JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeFocusChanged)(
     JNIEnv *env, jclass cls, jboolean hasFocus);
 
@@ -194,6 +198,7 @@ static JNINativeMethod SDLActivity_tab[] = {
     { "nativeQuit", "()V", SDL_JAVA_INTERFACE(nativeQuit) },
     { "nativePause", "()V", SDL_JAVA_INTERFACE(nativePause) },
     { "nativeResume", "()V", SDL_JAVA_INTERFACE(nativeResume) },
+    { "nativeClearPauseState", "()V", SDL_JAVA_INTERFACE(nativeClearPauseState) }, /* love2d-mod: a main started again begins unpaused */
     { "nativeFocusChanged", "(Z)V", SDL_JAVA_INTERFACE(nativeFocusChanged) },
     { "nativeGetHint", "(Ljava/lang/String;)Ljava/lang/String;", SDL_JAVA_INTERFACE(nativeGetHint) },
     { "nativeGetHintBoolean", "(Ljava/lang/String;Z)Z", SDL_JAVA_INTERFACE(nativeGetHintBoolean) },
@@ -1283,6 +1288,38 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeResume)(
      */
     SDL_SemPost(Android_ResumeSem);
 }
+
+/* love2d-mod-start: a main started again begins unpaused
+ * The pause and resume semaphores outlive an SDL main when the activity
+ * does, as when a main returns and the activity starts another in the
+ * same process. A pause posted while the old main was still running,
+ * but no longer pumping events, stays counted; the new main is started
+ * without a resume, so Android_ActivityMutex_Lock_Running() would wait
+ * for one forever as it creates the window. Called on the UI thread just
+ * before a new main starts, with no main running, this empties both,
+ * as fresh semaphores would be. */
+JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeClearPauseState)(
+    JNIEnv *env, jclass cls)
+{
+    int pauses = 0;
+    int resumes = 0;
+    if (Android_PauseSem) {
+        while (SDL_SemTryWait(Android_PauseSem) == 0) {
+            pauses++;
+        }
+    }
+    if (Android_ResumeSem) {
+        while (SDL_SemTryWait(Android_ResumeSem) == 0) {
+            resumes++;
+        }
+    }
+    if (pauses || resumes) {
+        __android_log_print(ANDROID_LOG_VERBOSE, "SDL",
+            "nativeClearPauseState(): cleared %d pause(s), %d resume(s) left from the last main",
+            pauses, resumes);
+    }
+}
+/* love2d-mod-end: a main started again begins unpaused */
 
 JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeFocusChanged)(
     JNIEnv *env, jclass cls, jboolean hasFocus)
