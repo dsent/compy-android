@@ -1918,6 +1918,15 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     Simple runnable to start the SDL application
 */
 class SDLMain implements Runnable {
+    // love2d-mod-start: a main started again begins unpaused
+    // a main that ends this soon after starting ends quickly
+    static final long QUICK_MS = 2000;
+    // quick ends in a row after which no next main is started
+    static final int QUICK_ENDS = 3;
+    // quick ends in a row so far, on the UI thread
+    static int sQuickEnds = 0;
+    // love2d-mod-end: a main started again begins unpaused
+
     @Override
     public void run() {
         // Runs SDL_main()
@@ -1932,6 +1941,7 @@ class SDLMain implements Runnable {
         }
 
         Log.v("SDL", "Running main function " + function + " from library " + library);
+        final long started = android.os.SystemClock.uptimeMillis(); // love2d-mod: a main started again begins unpaused
 
         SDLActivity.nativeRunMain(library, function, arguments);
 
@@ -1939,32 +1949,56 @@ class SDLMain implements Runnable {
 
         // love2d-mod-start: allow restarting of the native thread
         if (!SDLActivity.mExitCalledFromJava) {
-            if (SDLActivity.mSingleton != null && !SDLActivity.mSingleton.isFinishing()) {
+            final SDLActivity activity = SDLActivity.mSingleton;
+            if (activity != null && !activity.isFinishing()) {
                 // Let's finish the Activity
                 SDLActivity.mSDLThread = null;
-                SDLActivity.mSingleton.finish();
+                activity.finish();
 
                 // love2d-mod-start: a main started again begins unpaused
                 // The activity may stay: a kiosk in lock task mode refuses
-                // finish(). If it was resumed while this main was ending,
-                // handleNativeState took the nativeResume() branch and
-                // recorded RESUMED, so nothing would start the next main.
-                // Back on the UI thread, a staying activity recorded as
-                // resumed is set back to paused and asked to resume, which
+                // finish(). On API 24 and up (mHasMultiWindow) the native
+                // state is RESUMED from onStart to onStop, and losing focus
+                // does not pause it. If the activity was resumed while this
+                // main was ending, handleNativeState took the nativeResume()
+                // branch and recorded RESUMED, so nothing would start the
+                // next main. Back on the UI thread, a staying activity still
+                // recorded as resumed is paused and asked to resume, which
                 // starts the next main once it has its surface and focus.
-                final SDLActivity activity = SDLActivity.mSingleton;
+                // After an ordinary quit that minimizes the window, the main
+                // can end before onStop: the next main then starts and waits
+                // at its window until the activity comes back, as it would.
+                // A main that ends within QUICK_MS of starting counts as a
+                // quick end; after QUICK_ENDS of them in a row no next main
+                // is started, so a start that fails at once cannot spin.
+                final long lived = android.os.SystemClock.uptimeMillis() - started;
                 activity.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        if (SDLActivity.mSDLThread == null
-                                && SDLActivity.mSingleton == activity
-                                && !activity.isFinishing()
-                                && SDLActivity.mCurrentNativeState == SDLActivity.NativeState.RESUMED) {
-                            Log.v("SDL", "main ended in a resumed activity: starting the next main");
-                            SDLActivity.mCurrentNativeState = SDLActivity.NativeState.PAUSED;
-                            SDLActivity.mNextNativeState = SDLActivity.NativeState.RESUMED;
-                            SDLActivity.handleNativeState();
+                        if (SDLActivity.mSDLThread != null
+                                || SDLActivity.mSingleton != activity
+                                || activity.isFinishing()
+                                || SDLActivity.mCurrentNativeState != SDLActivity.NativeState.RESUMED) {
+                            return;
                         }
+                        if (lived < QUICK_MS) {
+                            sQuickEnds++;
+                        } else {
+                            sQuickEnds = 0;
+                        }
+                        if (sQuickEnds > QUICK_ENDS) {
+                            Log.e("SDL", "main ended " + sQuickEnds + " times in a row within "
+                                + QUICK_MS + " ms of starting: not starting another");
+                            return;
+                        }
+                        Log.v("SDL", "main ended in a resumed activity after " + lived
+                            + " ms: starting the next main");
+                        if (SDLActivity.mSurface != null) {
+                            SDLActivity.mSurface.handlePause();
+                        }
+                        SDLActivity.mCurrentNativeState = SDLActivity.NativeState.PAUSED;
+                        SDLActivity.mNextNativeState = SDLActivity.NativeState.RESUMED;
+                        SDLActivity.handleNativeState();
                     }
                 });
                 // love2d-mod-end: a main started again begins unpaused
